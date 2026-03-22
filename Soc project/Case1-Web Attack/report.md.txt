@@ -1,0 +1,92 @@
+ SOC Alert Investigation 1 — Arbitrary File Read via CVE-2024-24919
+Platform:LetsDefend  
+Alert ID: SOC287  
+Severity:High  
+Category: Web Attack  
+Date: Jun 06, 2024  
+
+1. Alert Overview
+
+A High severity alert was triggered on the LetsDefend SIEM platform 
+for EventID 263, flagging suspicious activity against a Check Point 
+Security Gateway. The rule SOC287 detected characteristics of 
+CVE-2024-24919 — a zero-day arbitrary file read vulnerability 
+affecting Check Point Security Gateways.
+
+2. Alert Details
+ Hostname - CP-Spark-Gateway-01 
+ Source IP - 203.160.68.12 
+ Destination IP - 172.16.20.146 
+ HTTP Method - POST 
+ Requested URL - /clients/MyCRL 
+ Malicious Payload 
+ Device Action -Allowed 
+ Alert Trigger-Exploit pattern matching CVE-2024-24919 
+
+
+ 3. Investigation Steps
+
+Step 1 — Understand the CVE
+CVE-2024-24919 is a zero-day path traversal vulnerability in Check 
+Point Security Gateways. It allows unauthenticated attackers to read 
+arbitrary files from the system — including sensitive files like 
+/etc/passwd which contains system user account information.
+
+Step 2 — Analyze the Malicious Request
+The request payload `aCSHELL/../../../../../../etc/passwd` is a 
+classic path traversal string. The repeated `../` sequences are 
+used to escape the web root directory and navigate to the system's 
+root, targeting the /etc/passwd file.
+
+The fact that the HTTP method was POST and the device action was 
+Allowed means the gateway did not block this request — 
+indicating the exploit reached its target.
+
+Step 3 — Log Analysis
+Searched Log Management for destination IP 172.16.20.146.
+
+Findings:
+- 5 events recorded against this destination
+- Source IP 203.160.68.12 made repeated POST requests at:
+  - 03:12 PM UTC
+  - 03:15 PM UTC
+- Same source port pattern across requests
+- Multiple hits from a single external IP in a short timeframe 
+  indicates automated/scripted exploitation, not accidental
+
+ Step 4 — Traffic Direction
+- Source: 203.160.68.12 (External IP)
+- Destination: 172.16.20.146 (Internal Gateway)
+- Direction: Internet → Internal Asset
+- Traffic: Allowed (not blocked by firewall/gateway)
+
+4. Verdict
+
+True Positive — Attack Successful
+
+The payload matches the known CVE-2024-24919 exploit pattern. 
+The device action was Allowed, meaning the malicious request was 
+not blocked and likely reached the target file. The repeated 
+requests from the same external IP confirm intentional, targeted 
+exploitation rather than a false positive.
+
+5. Playbook Actions Taken
+
+- Confirmed True Positive
+-  Identified attack type: Web Exploitation / Path Traversal
+- Confirmed traffic direction: External to Internal
+-  Verified attack was successful (Device Action: Allowed)
+-  Escalated to Tier 2 for containment
+-  Recommended isolating CP-Spark-Gateway-01 and applying 
+      vendor patch for CVE-2024-24919
+
+ 6. Lessons Learned
+
+- Always check Device Action — "Allowed" on a High severity 
+  alert is a critical indicator that the attack was not blocked
+- Repeated requests from the same source IP in a short window 
+  indicates scripted/automated exploitation
+- Path traversal strings like `../../` are a clear red flag in 
+  POST request payloads
+- CVE context matters — knowing what the vulnerability does helps 
+  determine severity of impact quickly.

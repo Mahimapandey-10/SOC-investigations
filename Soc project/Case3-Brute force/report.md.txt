@@ -1,0 +1,148 @@
+SOC Alert Investigation #3 — RDP Brute Force with Successful Login
+Platform: LetsDefend  
+Alert ID: SOC176  
+Severity: Medium  
+Category: Brute Force  
+Date: Mar 07, 2024  
+
+ 1. Alert Overview
+
+A Medium severity SIEM alert was triggered for EventID 234 under 
+rule SOC176 — "RDP Brute Force Detected." The alert flagged 
+repeated failed RDP login attempts from a single external IP 
+targeting an internal Windows host, with the firewall action set 
+to Allowed. This warranted immediate log investigation to determine 
+if the brute force resulted in unauthorized access.
+
+ 2. Alert Details
+
+ EventID  234 
+ Event Time - Mar 07, 2024, 11:44 AM 
+ Rule SOC176 - RDP Brute Force Detected 
+ Source IP - 218.92.0.56 
+ Destination IP - 172.16.17.148 
+ Destination Hostname - Matthew 
+ Protocol -RDP 
+ Destination Port - 3389 
+ Firewall Action - Allowed 
+ Alert Trigger Reason - Login failure from single source with different non-existing accounts 
+
+
+ 3. Investigation Steps
+
+ Step 1 — Log Analysis (Log Management)
+
+Searched Log Management for destination IP 172.16.17.148.
+
+Total Events Found: 30 (across 3 pages)
+
+This volume alone is a strong indicator of automated brute force 
+tooling — human attackers don't generate 30 RDP attempts manually.
+
+Failed Login Sample:
+- Source: 218.92.0.56 : Port 18845
+- Destination: 172.16.17.148 : Port 3389
+- Username attempted: `admin`
+- EventID: 4625(An account failed to log on)
+- Error Code: **0xC000006D** — Unknown username or bad password
+- Log Type: OS
+
+The attacker systematically tried non-existent usernames including 
+`admin` and `guest` — this matches the alert trigger reason of 
+"different non-existing accounts."
+
+Critical Finding — Successful Login Detected:
+- Username: `Matthew`
+- EventID: 4624 (An account was successfully logged on)
+- Logon Type: 10 — RemoteInteractive (RDP)
+- Source IP: 218.92.0.56 (same attacker IP)
+
+EventID 4624 with Logon Type 10 is the Windows security log 
+signature for a successful RDP session. The attacker eventually 
+found valid credentials and gained remote access to the host 
+"Matthew."
+
+ Step 2 — IP Reputation Check (Threat Intel + VirusTotal)
+
+LetsDefend Threat Intel:
+- IP `218.92.0.56` tagged as: Malicious
+- Recorded: Mar 08, 2024 (one day after the attack)
+
+VirusTotal:
+- 9 out of 94 vendors flagged as malicious
+- IP belongs to AS4134 — Chinanet 🇨🇳 (China)
+- Community context highlights:
+  - "SSH bruteforce Attackers" — tagged by ArcSight Threat 
+    Intelligence in September 2023
+  - CrowdSec CTI confirms SSH Bruteforce behavior
+
+
+This IP has a documented history of bruteforce behavior predating 
+this alert — it was not a first-time offender.
+
+Step 3 — Traffic Analysis
+
+- Direction: External (Internet) → Internal (RDP host)
+- Firewall Action: Allowed — RDP port 3389 was exposed to the 
+  internet with no blocking rule
+- 30 connection events indicates sustained, automated attack 
+  lasting over multiple minutes
+- Varying source ports (31245, 18845, etc.) suggest automated 
+  tooling cycling through credentials
+
+ Step 4 — Scope Determination
+
+- Single source IP (218.92.0.56) targeting single destination 
+  (172.16.17.148)
+- Only the "Matthew" host appears to be targeted
+- No lateral movement logs observed in this investigation window
+- However, since RDP access was gained, lateral movement risk is 
+  HIGH and requires Tier 2 investigation
+
+ 4. Verdict
+
+True Positive — Brute Force Attack with Successful RDP Compromise
+
+The attacker used automated credential stuffing against RDP 
+port 3389, generating 30+ failed login attempts across multiple 
+non-existing usernames before successfully authenticating as 
+user "Matthew." EventID 4624 with Logon Type 10 confirms an active 
+RDP session was established by the attacker.
+
+> Self-correction note: My initial analyst note stated the 
+> attack was "not successful." After reviewing the logs more 
+> carefully, EventID 4624 clearly indicates a successful login 
+> occurred. This highlights the importance of scrolling through 
+> all log pages — the success event was not on the first page.
+
+ 5. Playbook Actions Taken
+
+-  Confirmed True Positive
+-  Identified 30 events — confirmed automated brute force
+-  Found EventID 4625 — multiple failed logins (admin, guest)
+-  Found EventID 4624 — successful login as Matthew via RDP
+-  Confirmed Logon Type 10 (RemoteInteractive = RDP session)
+-  Verified source IP as malicious via Threat Intel + VirusTotal
+-  Confirmed prior bruteforce history on IP 
+-  Escalated to Tier 2 for containment
+-  Recommended: Immediately isolate host 172.16.17.148
+-  Recommended: Terminate active RDP session for user Matthew
+-  Recommended: Reset credentials for user Matthew
+-  Recommended: Block IP 218.92.0.56 at firewall
+-  Recommended: Disable public RDP exposure on port 3389 or 
+      restrict to VPN-only access
+
+ 6. Lessons Learned
+
+- Always page through all logs — the successful login (EventID 
+  4624) was not on the first page. Stopping at page 1 led to an 
+  incorrect initial conclusion that the attack failed
+- EventID 4624 + Logon Type 10 is the critical RDP success 
+  signature every SOC analyst must recognize
+- 30 events = automated tooling — no human manually attempts 
+  30 RDP logins in minutes; this is a credential stuffing script
+- RDP exposed to internet = critical risk — port 3389 should 
+  never be directly internet-facing without VPN or allowlisting
+-IP history matters — Chinanet (AS4134) is a well-known 
+  source of bruteforce traffic; prior community context on 
+  VirusTotal corroborated the attack pattern

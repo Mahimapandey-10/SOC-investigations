@@ -1,0 +1,136 @@
+# SOC Alert Investigation #2 — Phishing Email | Social Engineering via Fake Coffee Voucher
+Platform: LetsDefend  
+Alert ID: SOC282  
+Severity: Medium  
+Category: Exchange / Phishing  
+Date: May 13, 2024  
+
+ 1. Alert Overview
+
+A Medium severity SIEM alert was triggered for EventID 257 under 
+rule SOC282 — "Phishing Alert - Deceptive Mail Detected." The alert 
+flagged an inbound email from a suspicious external sender targeting 
+an internal user, with the email delivered successfully (Device 
+Action: Allowed).
+
+2. Alert Details
+
+EventID - 257 
+Event Time | May 13, 2024, 09:22 AM 
+SMTP Address | 103.80.134.63 
+ Source Address | free@coffeeshooop.com 
+ Destination - Felix@letsdefend.io 
+ Subject - Free Coffee Voucher 
+ Device Action - Allowed (Email Delivered) 
+ Log Source Type -Exchange 
+
+
+ 3. Investigation Steps
+
+ Step 1 — Sender Domain Analysis (MXToolbox)
+The sender domain `coffeeshooop.com` was analyzed using MXToolbox 
+SPF Record Lookup.
+
+Findings:
+- No SPF Record found
+- No DMARC Record found
+- No DNS records found for the domain
+
+The absence of SPF and DMARC records means the domain has zero 
+email authentication configured. Legitimate businesses always have 
+these records. This domain appears to be a throwaway domain created 
+specifically for phishing.
+
+Additionally, the domain name itself — `coffeeshooop.com` (three 
+o's) — is a typosquatting technique designed to appear legitimate 
+at a quick glance.
+
+Step 2 — SMTP IP Reputation Check (Threat Intel + VirusTotal)
+
+LetsDefend Threat Intel:
+- IP `103.80.134.63` was found in the Threat Intel database
+- Tagged as: Phishing
+- Recorded on: May 13, 2024, 02:52 PM (same day as the alert)
+
+VirusTotal:
+- 11 out of 94 security vendors flagged this IP as malicious
+- IP belongs to AS3786 — LG DACOM Corporation (South Korea 🇰🇷)
+- Notable vendor detections:
+
+The source IP has a confirmed malicious reputation across multiple 
+independent threat intelligence sources.
+
+Step 3 — Email Content Analysis (Email Security Tab)
+
+The email body was examined in the Email Security module.
+
+Social Engineering Indicators Observed:
+- Subject: "Free Coffee Voucher" — urgency-based lure
+- Body greeting: "Dear Felix" — personalized to target
+- Call to action: "Redeem Now" button (embedded link)
+- Urgency trigger: "Hurry, this offer expires soon!"
+- Sender display name designed to appear legitimate
+
+This email uses a classic reward-based social engineering 
+technique — luring the user with a free offer and creating urgency 
+to bypass critical thinking and get them to click.
+
+Step 4 — Log Analysis
+Searched Log Management for source IP 103.80.134.63.
+Log Entry:
+- Source: 103.80.134.63 : Port 45078
+- Destination: 172.16.20.3 : Port 25 (SMTP)
+- Time: May 13, 2024, 09:20 AM
+- Sender Mail confirmed: free@coffeeshooop.com
+
+Port 25 is the standard SMTP mail transfer port. The log confirms 
+the email was transmitted from the flagged IP directly to the 
+internal mail server two minutes before the alert triggered.
+
+ Step 5 — Delivery Confirmation
+Device Action was Allowed — the email was successfully delivered 
+to Felix@letsdefend.io's inbox. This means the target user had 
+potential exposure to the malicious content and embedded link.
+
+Only one recipient was found in the logs — this indicates a 
+targeted spear-phishing attempt rather than a mass spam campaign.
+
+4. Verdict
+
+True Positive — Phishing Attack, Email Successfully Delivered
+
+All indicators confirm this is a phishing attempt:
+- Typosquatted sender domain with no SPF/DMARC
+- Source IP flagged by 11/94 VirusTotal vendors + LetsDefend 
+  Threat Intel
+- Social engineering content with urgency and embedded link
+- Single targeted recipient — suggests deliberate targeting
+- Email was delivered (not blocked)
+
+5. Playbook Actions Taken
+
+- Confirmed True Positive
+- Verified email was delivered to user (Device Action: Allowed)
+- Analyzed sender domain — no SPF/DMARC, typosquatted
+- Confirmed SMTP IP as malicious via Threat Intel + VirusTotal
+- Reviewed email body for social engineering indicators
+- Escalated to Tier 2
+- Recommended: Delete email from Felix's mailbox immediately
+- Recommended: Check if Felix clicked the "Redeem Now" link
+- Recommended: Block domain coffeeshooop.com and IP 
+      103.80.134.63 at mail gateway
+
+ 6. Lessons Learned
+
+- Typosquatting is subtle — `coffeeshooop.com` vs 
+  `coffeeshop.com` is easy to miss on a quick glance. Always 
+  inspect sender domains carefully
+- Missing SPF/DMARC = immediate red flag — no legitimate 
+  business sends email without email authentication records
+- Port 25 in logs confirms direct SMTP injection, not a 
+  forwarded or spoofed header
+- Single recipient targetin indicates this wasn't bulk spam 
+  — the attacker likely researched the target, making it more 
+  dangerous
+
+
