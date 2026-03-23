@@ -131,6 +131,6 @@ All indicators confirm this is a phishing attempt:
   forwarded or spoofed header
 - Single recipient targetin indicates this wasn't bulk spam 
   — the attacker likely researched the target, making it more 
-  dangerous
+  dangerous.
 
 
